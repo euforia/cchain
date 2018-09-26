@@ -1,10 +1,7 @@
 package compose
 
 import (
-	"fmt"
-
 	"github.com/docker/cli/cli/compose/types"
-	//libcomposeyaml "github.com/docker/libcompose/yaml"
 )
 
 // Compose holds a set of parsed composed file that belong together
@@ -48,13 +45,6 @@ func NewCompose(workdir string, env map[string]string, files ...string) (*Compos
 // Config returns a docker-compose config
 func (c *Compose) Config() *types.Config {
 	return c.config
-}
-
-func (c *Compose) Builds() {
-	services := c.config.Services
-	for _, service := range services {
-		fmt.Println(service.Build)
-	}
 }
 
 func parseDockerComposeFiles(env map[string]string, workdir string, files ...string) (*types.Config, error) {

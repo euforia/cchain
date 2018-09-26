@@ -5,9 +5,11 @@ services:
       context: .
       dockerfile: Dockerfile.development
     image: "project/app"
-    env_file: .env
     volumes:
       - .:/go/src/github.com/org/project
+    environment:
+      - DB_HOST=db:5432
+      - DB_NAME=db1
     depends_on:
       - db
     ports:
@@ -15,18 +17,13 @@ services:
     command: 'go run main.go'
   ui:
     image: "project/app"
-    env_file: .env
     volumes:
       - .:/go/src/github.com/org/project
     ports:
       - 3000:3000
     working_dir: "/go/src/github.com/org/project/ui"
     command: "yarn start"
+    environment:
+      - API_ADDR=http://app:9000
     depends_on:
       - app
-  db:
-    image: postgres
-    ports:
-      - 5432:5432
-    volumes:
-          - ./tmp/db:/var/lib/postgresql/data
