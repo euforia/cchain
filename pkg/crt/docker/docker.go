@@ -1,0 +1,140 @@
+package docker
+
+import (
+	"io"
+	"os"
+	"time"
+
+	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/filters"
+	"github.com/docker/docker/client"
+	"github.com/docker/docker/pkg/jsonmessage"
+	"github.com/docker/docker/pkg/stdcopy"
+	"golang.org/x/net/context"
+)
+
+// Docker implements a docker backed orchestrator
+type Docker struct {
+	cli *client.Client
+}
+
+// NewDocker returns a new docker container runtime interface
+func NewDocker() (*Docker, error) {
+	os.Setenv("DOCKER_API_VERSION", "1.37")
+	cli, err := client.NewEnvClient()
+	if err == nil {
+		return &Docker{cli}, nil
+	}
+
+	return nil, err
+}
+
+// HaveImage returns true if we locally have the image
+func (orch *Docker) HaveImage(ctx context.Context, imageID string) bool {
+	_, _, err := orch.cli.ImageInspectWithRaw(ctx, imageID)
+	return err == nil
+}
+
+// Run creates and runs a container with the given config
+func (orch *Docker) Run(ctx context.Context, name string, cfg *ContainerCreateConfig) ([]string, error) {
+	resp, err := orch.cli.ContainerCreate(ctx, cfg.Container, cfg.Host, cfg.Network, name)
+	if err == nil {
+		err = orch.cli.ContainerStart(ctx, resp.ID, types.ContainerStartOptions{})
+		return resp.Warnings, err
+	}
+
+	return nil, err
+}
+
+// Inspect returns information about the container by id
+func (orch *Docker) Inspect(ctx context.Context, containerID string) (types.ContainerJSON, error) {
+	return orch.cli.ContainerInspect(ctx, containerID)
+}
+
+// CreateNetwork sets up a user-defined bridge network only if one does not
+// exist by the given id
+func (orch *Docker) CreateNetwork(ctx context.Context, netID string) error {
+	_, err := orch.cli.NetworkInspect(ctx, netID, types.NetworkInspectOptions{})
+	if err != nil {
+		_, err = orch.cli.NetworkCreate(ctx, netID, types.NetworkCreate{})
+	}
+
+	return err
+}
+
+// ListImagesWithLabel returns a list of images that match the given label
+func (orch *Docker) ListImagesWithLabel(ctx context.Context, label string) ([]types.ImageSummary, error) {
+	args := filters.NewArgs(filters.Arg("label", label))
+	opts := types.ImageListOptions{Filters: args}
+	return orch.cli.ImageList(ctx, opts)
+}
+
+// Stop stops a running container
+func (orch *Docker) Stop(ctx context.Context, containerID string) error {
+	dur := 3 * time.Second
+	return orch.cli.ContainerStop(ctx, containerID, &dur)
+}
+
+// Remove forcibly stops and removes a container
+func (orch *Docker) Remove(ctx context.Context, cid string) error {
+	opts := types.ContainerRemoveOptions{Force: true}
+	return orch.cli.ContainerRemove(ctx, cid, opts)
+}
+
+// Logs returns logs for a single container
+func (orch *Docker) Logs(ctx context.Context, containerID string, stdout, stderr io.Writer) error {
+	opts := types.ContainerLogsOptions{
+		ShowStderr: true,
+		ShowStdout: true,
+	}
+
+	clogs, err := orch.cli.ContainerLogs(ctx, containerID, opts)
+	if err != nil {
+		return err
+	}
+	defer clogs.Close()
+
+	// Write container's stdout and stderr to the provided ones
+	_, err = stdcopy.StdCopy(stdout, stderr, clogs)
+	return err
+}
+
+// RegistryLogin logins into a registry.  Only auth or user/pass can be used
+func (orch *Docker) RegistryLogin(ctx context.Context, authConf types.AuthConfig) error {
+	_, err := orch.cli.RegistryLogin(ctx, authConf)
+	return err
+}
+
+// ImageConfig returns an image config for the given name and tagged image
+func (orch *Docker) ImageConfig(name string) (*container.Config, error) {
+	inf, _, err := orch.cli.ImageInspectWithRaw(context.Background(), name)
+	if err == nil {
+		return inf.Config, nil
+	}
+	return nil, err
+}
+
+// ImagePull pulls in image from the docker registry using docker. This uses
+// dockers built in mechanism to communicate to the registry
+func (orch *Docker) ImagePull(ctx context.Context, req *PullRequest) error {
+	rd, err := orch.cli.ImagePull(ctx, req.Ref(), req.Options)
+	if err == nil {
+		defer rd.Close()
+		err = jsonmessage.DisplayJSONMessagesStream(rd, req.Output, 100, true, nil)
+	}
+
+	return err
+}
+
+// ImagePush pushes an image using the local docker engine to the remote registry.
+// It logins into the registry before attempting the push
+func (orch *Docker) ImagePush(ctx context.Context, req *PushRequest) error {
+	rc, err := orch.cli.ImagePush(ctx, req.Image+":"+req.Tag, req.Options)
+	if err != nil {
+		defer rc.Close()
+		err = jsonmessage.DisplayJSONMessagesStream(rc, req.Output, 101, true, nil)
+	}
+
+	return err
+}
