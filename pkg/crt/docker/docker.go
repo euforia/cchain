@@ -117,8 +117,14 @@ func (orch *Docker) ImageConfig(name string) (*container.Config, error) {
 
 // ImagePull pulls in image from the docker registry using docker. This uses
 // dockers built in mechanism to communicate to the registry
-func (orch *Docker) ImagePull(ctx context.Context, req *PullRequest) error {
-	rd, err := orch.cli.ImagePull(ctx, req.Ref(), req.Options)
+func (orch *Docker) ImagePull(ctx context.Context, req *PushPullRequest) error {
+	opts := types.ImagePullOptions{
+		All:           req.Options.All,
+		Platform:      req.Options.Platform,
+		RegistryAuth:  req.Options.RegistryAuth,
+		PrivilegeFunc: req.Options.PrivilegeFunc,
+	}
+	rd, err := orch.cli.ImagePull(ctx, req.Ref(), opts)
 	if err == nil {
 		defer rd.Close()
 		err = jsonmessage.DisplayJSONMessagesStream(rd, req.Output, 100, true, nil)
@@ -129,8 +135,14 @@ func (orch *Docker) ImagePull(ctx context.Context, req *PullRequest) error {
 
 // ImagePush pushes an image using the local docker engine to the remote registry.
 // It logins into the registry before attempting the push
-func (orch *Docker) ImagePush(ctx context.Context, req *PushRequest) error {
-	rc, err := orch.cli.ImagePush(ctx, req.Image+":"+req.Tag, req.Options)
+func (orch *Docker) ImagePush(ctx context.Context, req *PushPullRequest) error {
+	opts := types.ImagePushOptions{
+		All:           req.Options.All,
+		Platform:      req.Options.Platform,
+		RegistryAuth:  req.Options.RegistryAuth,
+		PrivilegeFunc: req.Options.PrivilegeFunc,
+	}
+	rc, err := orch.cli.ImagePush(ctx, req.Image+":"+req.Tag, opts)
 	if err != nil {
 		defer rc.Close()
 		err = jsonmessage.DisplayJSONMessagesStream(rc, req.Output, 101, true, nil)

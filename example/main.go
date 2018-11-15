@@ -71,6 +71,7 @@ func cmdImageConf() *cli.Command {
 			if imgName == "" {
 				return errors.New("image name required")
 			}
+			client.
 			img, err := dockerimage.NewDockerImage(client, imgName)
 			if err != nil {
 				return err

@@ -48,23 +48,23 @@ func (req *BuildRequest) SetIgnores() error {
 	return nil
 }
 
-// PushRequest is a container image push request
-type PushRequest struct {
+// PushPullRequest is a container image push request
+type PushPullRequest struct {
 	Image   string
 	Tag     string
 	Output  io.Writer
 	Options types.ImagePushOptions
 }
 
-// PullRequest ..
-type PullRequest struct {
-	Image   string
-	Tag     string
-	Output  io.Writer
-	Options types.ImagePullOptions
+// Ref returns the fully qualified image reference
+func (req *PushPullRequest) Ref() string {
+	return req.Image + ":" + req.Tag
 }
 
-// Ref returns the fully qualified image reference
-func (req *PullRequest) Ref() string {
-	return req.Image + ":" + req.Tag
+// PushPullOptions are the options available for a push or pull request
+type PushPullOptions struct {
+	All           bool
+	Platform      string
+	RegistryAuth  string
+	PrivilegeFunc func() (string, error)
 }
